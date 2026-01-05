@@ -218,7 +218,7 @@ export class PlayerTargets {
     })
 
     const sprite = new THREE.Sprite(material)
-    sprite.scale.set(4, 4, 1) // Square PFP
+    sprite.scale.set(8, 8, 1) // Square PFP - 2x bigger for visibility
 
     // Random spawn position in tunnel
     const angle = Math.random() * Math.PI * 2
