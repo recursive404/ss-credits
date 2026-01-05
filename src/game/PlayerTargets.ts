@@ -136,8 +136,8 @@ export class PlayerTargets {
     // Pulse synchronized across all targets (will sync to BPM later)
     const pulse = Math.sin(this.gameTime * 4) * 0.5 + 0.5 // 0-1 pulse
     const material = target.mesh.material as THREE.SpriteMaterial
-    // Modulate opacity slightly for pulse effect
-    material.opacity = 0.9 + pulse * 0.1
+    // Modulate opacity slightly for pulse effect - keep it subtle
+    material.opacity = 0.75 + pulse * 0.15  // Reduced max brightness
   }
 
   private spawnTarget(): void {
@@ -156,14 +156,14 @@ export class PlayerTargets {
     const centerY = size / 2
     const radius = size / 2 - 20
 
-    // Draw pulsating glow border
+    // Draw pulsating glow border (toned down to prevent bloom blowout)
     const pulse = Math.sin(this.gameTime * 4) * 0.5 + 0.5
     ctx.shadowColor = colors.glow
-    ctx.shadowBlur = 20 + pulse * 15
+    ctx.shadowBlur = 8 + pulse * 6  // Reduced from 20+15
 
     // Outer colored ring (pulsating)
     ctx.strokeStyle = colors.main
-    ctx.lineWidth = 8 + pulse * 4
+    ctx.lineWidth = 4 + pulse * 2  // Reduced from 8+4
     ctx.beginPath()
     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
     ctx.stroke()

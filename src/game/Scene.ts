@@ -42,12 +42,12 @@ export class Scene {
     this.composer = new EffectComposer(this.renderer)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
 
-    // Bloom for neon glow
+    // Bloom for neon glow - tuned to avoid blowing out sprites
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.8,  // strength
-      0.4,  // radius
-      0.85  // threshold
+      0.4,  // strength (reduced from 0.8)
+      0.3,  // radius (reduced)
+      0.92  // threshold (raised - less bloom on mid-tones)
     )
     this.composer.addPass(bloomPass)
 
