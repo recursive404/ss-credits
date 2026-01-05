@@ -10,6 +10,7 @@ const API_BASE = 'https://scoresaber.com/api'
 interface ScoreSaberPlayer {
   id: string
   name: string
+  profilePicture: string
   country: string
   pp: number
   rank: number
@@ -45,7 +46,8 @@ export async function fetchTopPlayers(count: number = 100): Promise<Player[]> {
           rank: p.rank,
           country: p.country,
           pp: p.pp.toFixed(2),
-          countryRank: p.countryRank
+          countryRank: p.countryRank,
+          profilePicture: p.profilePicture
         })
 
         if (players.length >= count) break
@@ -67,15 +69,15 @@ export async function fetchTopPlayers(count: number = 100): Promise<Player[]> {
 
 function getSamplePlayers(): Player[] {
   // Fallback sample data if API fails
+  const defaultAvatar = 'https://cdn.scoresaber.com/avatars/oculus.png'
   return [
-    { name: 'Bizzy825', rank: 1, country: 'CA', pp: '21027.39', countryRank: 1 },
-    { name: 'oermergeesh', rank: 2, country: 'US', pp: '20970.75', countryRank: 1 },
-    { name: 'Brazy', rank: 3, country: 'CA', pp: '20750.65', countryRank: 2 },
-    { name: 'Matty', rank: 4, country: 'GB', pp: '20627.97', countryRank: 1 },
-    { name: 'Bytesy', rank: 5, country: 'US', pp: '20461.87', countryRank: 2 },
-    { name: 'Haste', rank: 6, country: 'NZ', pp: '19888.94', countryRank: 1 },
-    { name: 'Shorties1326', rank: 9, country: 'US', pp: '18984.28', countryRank: 3 },
-    { name: 'Kira', rank: 10, country: 'US', pp: '18734.80', countryRank: 4 },
-    // Add more sample data...
+    { name: 'Bizzy825', rank: 1, country: 'CA', pp: '21027.39', countryRank: 1, profilePicture: defaultAvatar },
+    { name: 'oermergeesh', rank: 2, country: 'US', pp: '20970.75', countryRank: 1, profilePicture: defaultAvatar },
+    { name: 'Brazy', rank: 3, country: 'CA', pp: '20750.65', countryRank: 2, profilePicture: defaultAvatar },
+    { name: 'Matty', rank: 4, country: 'GB', pp: '20627.97', countryRank: 1, profilePicture: defaultAvatar },
+    { name: 'Bytesy', rank: 5, country: 'US', pp: '20461.87', countryRank: 2, profilePicture: defaultAvatar },
+    { name: 'Haste', rank: 6, country: 'NZ', pp: '19888.94', countryRank: 1, profilePicture: defaultAvatar },
+    { name: 'Shorties1326', rank: 9, country: 'US', pp: '18984.28', countryRank: 3, profilePicture: defaultAvatar },
+    { name: 'Kira', rank: 10, country: 'US', pp: '18734.80', countryRank: 4, profilePicture: defaultAvatar },
   ]
 }
