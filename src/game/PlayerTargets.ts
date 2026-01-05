@@ -1,10 +1,12 @@
 /**
  * PlayerTargets.ts - Flying player name targets
- * The main gameplay element - player names flying at camera
+ * PFP-focused targets with red/blue colors and pulsating borders
  */
 
 import * as THREE from 'three'
 import { game } from './Game'
+
+export type TargetColor = 'red' | 'blue'
 
 export interface Player {
   name: string
@@ -13,6 +15,7 @@ export interface Player {
   pp: string
   countryRank: number
   profilePicture: string
+  color: TargetColor
 }
 
 interface Target {
@@ -21,28 +24,34 @@ interface Target {
   velocity: THREE.Vector3
   alive: boolean
   avatarImage?: HTMLImageElement
+  spawnTime: number
 }
 
-interface Soul {
+interface NamePopup {
   mesh: THREE.Sprite
   velocity: THREE.Vector3
   lifetime: number
   opacity: number
 }
 
+// Beat Saber colors
+const COLORS = {
+  red: { main: '#ff3366', glow: '#ff6b6b', dark: '#c92a2a' },
+  blue: { main: '#3366ff', glow: '#74c0fc', dark: '#1971c2' }
+}
+
 export class PlayerTargets {
   private players: Player[] = []
   private targets: Target[] = []
-  private souls: Soul[] = []
+  private namePopups: NamePopup[] = []
   private avatarCache: Map<string, HTMLImageElement> = new Map()
-  private raycaster = new THREE.Raycaster()
   private spawnTimer = 0
-  private spawnInterval = 0.3 // seconds between spawns
+  private spawnInterval = 0.5 // seconds between spawns (slower)
   private playerIndex = 0
+  private gameTime = 0
 
   setPlayers(players: Player[]): void {
     this.players = players
-    // Pre-load avatars
     this.preloadAvatars()
   }
 
@@ -73,12 +82,14 @@ export class PlayerTargets {
 
   start(): void {
     this.targets = []
-    this.souls = []
+    this.namePopups = []
     this.playerIndex = 0
     this.spawnTimer = 0
+    this.gameTime = 0
   }
 
   update(delta: number): void {
+    this.gameTime += delta
     this.spawnTimer += delta
 
     // Spawn new targets
@@ -91,87 +102,109 @@ export class PlayerTargets {
     for (const target of this.targets) {
       if (!target.alive) continue
 
-      // Move towards camera
+      // Move towards camera (SLOWER velocity)
       target.mesh.position.add(target.velocity.clone().multiplyScalar(delta))
+
+      // Update pulsating border by regenerating texture
+      this.updateTargetPulse(target)
 
       // Check if passed camera
       if (target.mesh.position.z > 5) {
-        this.removeTarget(target, false) // Don't spawn soul if missed
+        this.removeTarget(target, false)
       }
     }
 
-    // Update souls (floating avatars)
-    for (let i = this.souls.length - 1; i >= 0; i--) {
-      const soul = this.souls[i]
-      soul.lifetime -= delta
-      soul.opacity = Math.max(0, soul.lifetime / 2) // Fade over 2 seconds
+    // Update name popups (floating names after hit)
+    for (let i = this.namePopups.length - 1; i >= 0; i--) {
+      const popup = this.namePopups[i]
+      popup.lifetime -= delta
+      popup.opacity = Math.max(0, popup.lifetime / 1.5)
 
-      // Float upward and drift
-      soul.mesh.position.add(soul.velocity.clone().multiplyScalar(delta))
-      soul.mesh.scale.multiplyScalar(1 + delta * 0.5) // Grow slightly
-      ;(soul.mesh.material as THREE.SpriteMaterial).opacity = soul.opacity
+      popup.mesh.position.add(popup.velocity.clone().multiplyScalar(delta))
+      popup.mesh.scale.multiplyScalar(1 + delta * 0.3)
+      ;(popup.mesh.material as THREE.SpriteMaterial).opacity = popup.opacity
 
-      if (soul.lifetime <= 0) {
-        game.scene.scene.remove(soul.mesh)
-        ;(soul.mesh.material as THREE.SpriteMaterial).dispose()
-        this.souls.splice(i, 1)
+      if (popup.lifetime <= 0) {
+        game.scene.scene.remove(popup.mesh)
+        ;(popup.mesh.material as THREE.SpriteMaterial).dispose()
+        this.namePopups.splice(i, 1)
       }
     }
+  }
+
+  private updateTargetPulse(target: Target): void {
+    // Pulse synchronized across all targets (will sync to BPM later)
+    const pulse = Math.sin(this.gameTime * 4) * 0.5 + 0.5 // 0-1 pulse
+    const material = target.mesh.material as THREE.SpriteMaterial
+    // Modulate opacity slightly for pulse effect
+    material.opacity = 0.9 + pulse * 0.1
   }
 
   private spawnTarget(): void {
     const player = this.players[this.playerIndex++]
     const avatarImage = this.avatarCache.get(player.profilePicture)
+    const colors = COLORS[player.color]
 
-    // Create text sprite with avatar
+    // Create PFP-focused circular target
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')!
-    canvas.width = 512
-    canvas.height = 128
+    const size = 256
+    canvas.width = size
+    canvas.height = size
 
-    // Draw background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-    ctx.roundRect(0, 0, canvas.width, canvas.height, 16)
-    ctx.fill()
+    const centerX = size / 2
+    const centerY = size / 2
+    const radius = size / 2 - 20
 
-    // Draw avatar circle on left side
-    const avatarSize = 80
-    const avatarX = 50
-    const avatarY = canvas.height / 2
+    // Draw pulsating glow border
+    const pulse = Math.sin(this.gameTime * 4) * 0.5 + 0.5
+    ctx.shadowColor = colors.glow
+    ctx.shadowBlur = 20 + pulse * 15
 
+    // Outer colored ring (pulsating)
+    ctx.strokeStyle = colors.main
+    ctx.lineWidth = 8 + pulse * 4
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
+    ctx.stroke()
+
+    // Reset shadow for avatar
+    ctx.shadowBlur = 0
+
+    // Draw avatar circle
     if (avatarImage) {
       ctx.save()
       ctx.beginPath()
-      ctx.arc(avatarX, avatarY, avatarSize / 2, 0, Math.PI * 2)
+      ctx.arc(centerX, centerY, radius - 10, 0, Math.PI * 2)
       ctx.closePath()
       ctx.clip()
-      ctx.drawImage(avatarImage, avatarX - avatarSize / 2, avatarY - avatarSize / 2, avatarSize, avatarSize)
+      ctx.drawImage(avatarImage, 20, 20, size - 40, size - 40)
       ctx.restore()
-
-      // Avatar border glow
-      ctx.strokeStyle = '#66ffff'
-      ctx.lineWidth = 3
+    } else {
+      // Placeholder circle
+      ctx.fillStyle = colors.dark
       ctx.beginPath()
-      ctx.arc(avatarX, avatarY, avatarSize / 2 + 2, 0, Math.PI * 2)
-      ctx.stroke()
+      ctx.arc(centerX, centerY, radius - 10, 0, Math.PI * 2)
+      ctx.fill()
     }
 
-    // Draw text (shifted right to make room for avatar)
-    const textX = avatarImage ? 280 : canvas.width / 2
+    // Inner border
+    ctx.strokeStyle = colors.glow
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, radius - 10, 0, Math.PI * 2)
+    ctx.stroke()
 
-    ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 36px "Segoe UI", sans-serif'
+    // Small rank badge at bottom
+    ctx.fillStyle = 'rgba(0,0,0,0.8)'
+    ctx.beginPath()
+    ctx.arc(centerX, size - 30, 25, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 18px "Segoe UI", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-
-    // Country flag + name
-    const flag = this.getFlag(player.country)
-    ctx.fillText(`${flag} ${player.name}`, textX, 40)
-
-    // Rank and PP
-    ctx.font = '22px "Segoe UI", sans-serif'
-    ctx.fillStyle = '#ffcc00'
-    ctx.fillText(`#${player.rank} • ${parseFloat(player.pp).toLocaleString()}pp`, textX, 85)
+    ctx.fillText(`#${player.rank}`, centerX, size - 30)
 
     // Create texture and sprite
     const texture = new THREE.CanvasTexture(canvas)
@@ -185,22 +218,22 @@ export class PlayerTargets {
     })
 
     const sprite = new THREE.Sprite(material)
-    sprite.scale.set(10, 2.5, 1)
+    sprite.scale.set(4, 4, 1) // Square PFP
 
     // Random spawn position in tunnel
     const angle = Math.random() * Math.PI * 2
-    const radius = Math.random() * 15 + 5
+    const spawnRadius = Math.random() * 12 + 5
     sprite.position.set(
-      Math.cos(angle) * radius,
-      Math.sin(angle) * radius,
-      -150 - Math.random() * 50
+      Math.cos(angle) * spawnRadius,
+      Math.sin(angle) * spawnRadius,
+      -120 - Math.random() * 40
     )
 
-    // Random velocity (mainly towards camera, slight drift)
+    // SLOWER velocity
     const velocity = new THREE.Vector3(
-      (Math.random() - 0.5) * 10,
-      (Math.random() - 0.5) * 10,
-      30 + Math.random() * 20
+      (Math.random() - 0.5) * 5,
+      (Math.random() - 0.5) * 5,
+      12 + Math.random() * 8 // Much slower: was 30-50, now 12-20
     )
 
     const target: Target = {
@@ -208,7 +241,8 @@ export class PlayerTargets {
       player,
       velocity,
       alive: true,
-      avatarImage
+      avatarImage,
+      spawnTime: this.gameTime
     }
 
     this.targets.push(target)
@@ -220,43 +254,42 @@ export class PlayerTargets {
     }
   }
 
-  private removeTarget(target: Target, spawnSoul: boolean = true): void {
+  private removeTarget(target: Target, spawnPopup: boolean = true): void {
     target.alive = false
     const position = target.mesh.position.clone()
     game.scene.scene.remove(target.mesh)
     ;(target.mesh.material as THREE.SpriteMaterial).dispose()
 
-    // Spawn soul effect (floating avatar) if hit
-    if (spawnSoul && target.avatarImage) {
-      this.spawnSoul(target.avatarImage, position)
+    // Spawn name popup (instead of avatar soul)
+    if (spawnPopup) {
+      this.spawnNamePopup(target.player, position)
     }
   }
 
-  private spawnSoul(avatarImage: HTMLImageElement, position: THREE.Vector3): void {
-    // Create circular avatar sprite
+  private spawnNamePopup(player: Player, position: THREE.Vector3): void {
+    const colors = COLORS[player.color]
+
+    // Create name text sprite
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')!
-    const size = 128
-    canvas.width = size
-    canvas.height = size
+    canvas.width = 512
+    canvas.height = 128
 
-    // Draw glowing circular avatar
-    ctx.save()
-    ctx.beginPath()
-    ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2)
-    ctx.closePath()
-    ctx.clip()
-    ctx.drawImage(avatarImage, 0, 0, size, size)
-    ctx.restore()
+    // Name text with glow
+    ctx.shadowColor = colors.glow
+    ctx.shadowBlur = 15
+    ctx.fillStyle = '#ffffff'
+    ctx.font = 'bold 42px "Segoe UI", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
 
-    // Add ethereal glow border
-    ctx.strokeStyle = 'rgba(150, 255, 255, 0.8)'
-    ctx.lineWidth = 4
-    ctx.shadowColor = '#66ffff'
-    ctx.shadowBlur = 20
-    ctx.beginPath()
-    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2)
-    ctx.stroke()
+    const flag = this.getFlag(player.country)
+    ctx.fillText(`${flag} ${player.name}`, canvas.width / 2, 50)
+
+    // PP text
+    ctx.font = '24px "Segoe UI", sans-serif'
+    ctx.fillStyle = colors.main
+    ctx.fillText(`${parseFloat(player.pp).toLocaleString()}pp`, canvas.width / 2, 95)
 
     const texture = new THREE.CanvasTexture(canvas)
     const material = new THREE.SpriteMaterial({
@@ -267,51 +300,52 @@ export class PlayerTargets {
     })
 
     const sprite = new THREE.Sprite(material)
-    sprite.scale.set(3, 3, 1)
+    sprite.scale.set(6, 1.5, 1)
     sprite.position.copy(position)
 
-    // Float upward with some random drift
+    // Float upward with drift
     const velocity = new THREE.Vector3(
-      (Math.random() - 0.5) * 5,
-      8 + Math.random() * 4, // Float up
-      (Math.random() - 0.5) * 5
+      (Math.random() - 0.5) * 3,
+      6 + Math.random() * 3,
+      (Math.random() - 0.5) * 3
     )
 
-    const soul: Soul = {
+    const popup: NamePopup = {
       mesh: sprite,
       velocity,
-      lifetime: 2, // 2 seconds
+      lifetime: 1.5,
       opacity: 1
     }
 
-    this.souls.push(soul)
+    this.namePopups.push(popup)
     game.scene.scene.add(sprite)
   }
 
-  checkHit(ndc: THREE.Vector2, camera: THREE.Camera): Player | null {
-    this.raycaster.setFromCamera(ndc, camera)
+  // Check hit with specific color requirement
+  checkHit(position: THREE.Vector3, shotColor: TargetColor): { player: Player; correct: boolean } | null {
+    // Find closest target within hit radius
+    const hitRadius = 3
 
-    const meshes = this.targets
-      .filter(t => t.alive)
-      .map(t => t.mesh)
+    for (const target of this.targets) {
+      if (!target.alive) continue
 
-    const intersects = this.raycaster.intersectObjects(meshes)
-
-    if (intersects.length > 0) {
-      const hitMesh = intersects[0].object
-      const target = this.targets.find(t => t.mesh === hitMesh)
-
-      if (target) {
-        this.removeTarget(target, true) // Spawn soul on hit!
-        return target.player
+      const distance = target.mesh.position.distanceTo(position)
+      if (distance < hitRadius) {
+        const correct = target.player.color === shotColor
+        this.removeTarget(target, true)
+        return { player: target.player, correct }
       }
     }
 
     return null
   }
 
+  // Get all alive targets for projectile collision
+  getAliveTargets(): Target[] {
+    return this.targets.filter(t => t.alive)
+  }
+
   private getFlag(countryCode: string): string {
-    // Convert country code to flag emoji
     const codePoints = countryCode
       .toUpperCase()
       .split('')
